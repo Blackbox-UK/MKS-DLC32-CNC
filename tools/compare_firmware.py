@@ -45,6 +45,51 @@ SETTING_NAME_RE = re.compile(
 )
 
 
+# Distinctive init-command bytes for TFT_eSPI panel drivers. The driver in an
+# image is the one whose command set appears together in its init code.
+DISPLAY_SIGNATURES = {
+    "ST7789 (TS24)": {0xB2, 0xB7, 0xBB, 0xC2, 0xC3, 0xC4, 0xC6, 0xD0},
+    "ST7796 (TS35)": {0xF0, 0xC3, 0x96, 0xA5, 0xE8, 0xC1, 0xC5},
+    "ILI9341": {0xEF, 0xCF, 0xED, 0xE8, 0xCB, 0xF7, 0xEA},
+}
+
+
+def detect_display_driver(app):
+    """Best-matching display driver, or None if capstone isn't installed."""
+    try:
+        import capstone
+    except ImportError:
+        return None
+    if not hasattr(capstone, "CS_ARCH_XTENSA"):
+        return None
+    md = capstone.Cs(capstone.CS_ARCH_XTENSA, 0)
+    imms = []
+    pos = 24
+    for _ in range(app[1]):
+        addr, length = struct.unpack("<II", app[pos:pos + 8])
+        code = app[pos + 8:pos + 8 + length]
+        pos += 8 + length
+        if not 0x400D0000 <= addr < 0x40400000:  # flash-mapped code only
+            continue
+        off = 0
+        while off < len(code):
+            end = None
+            for ins in md.disasm(code[off:off + 4096], addr + off):
+                end = ins.address + ins.size
+                if ins.mnemonic in ("movi", "movi.n"):
+                    try:
+                        imms.append(int(ins.op_str.split(",")[-1], 0))
+                    except ValueError:
+                        pass
+            off = (end - addr) if end else off + 1
+    scores = {}
+    for name, sig in DISPLAY_SIGNATURES.items():
+        scores[name] = max((len(set(imms[k:k + 60]) & sig) / len(sig)
+                            for k in range(0, len(imms), 4)), default=0)
+    best = max(scores, key=scores.get)
+    return best if scores[best] == 1 else "unknown"
+
+
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -109,6 +154,7 @@ def analyse(path):
     info["flash_size"] = FLASH_SIZES.get(app[3] >> 4, hex(app[3] >> 4))
     info["flash_freq"] = FLASH_FREQS.get(app[3] & 0xF, hex(app[3] & 0xF))
     info["segments"] = app[1]
+    info["display"] = detect_display_driver(app)
     ident = {}
     for label, pattern in IDENTITY_PATTERNS.items():
         found = sorted({m.decode(errors="replace") for m in re.findall(pattern, app)})
@@ -149,6 +195,8 @@ def report(stock, build):
     out.append(row("Partition table", fmt_parts(stock["partitions"]), fmt_parts(build["partitions"])))
     if stock["bootloader_sha256"] and build["bootloader_sha256"]:
         out.append(row("Bootloader SHA-256", stock["bootloader_sha256"][:16], build["bootloader_sha256"][:16]))
+    if stock["display"] is not None:
+        out.append(row("Display driver", stock["display"], build["display"]))
     out.append("")
     out.append("## Identity strings\n")
     out.append("| Item | Stock | Build | Result |")

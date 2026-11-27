@@ -40,7 +40,7 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('firmware-src/Firmware/platformio.ini', 'firmware-src/Firmware/ini/*.ini') }}
 
       - name: Install PlatformIO and esptool
-        run: pip install platformio esptool
+        run: pip install platformio esptool && pip install --pre "capstone>=6.0.0a1"
 
       - name: Build
         working-directory: firmware-src/Firmware
