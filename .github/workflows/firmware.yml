@@ -59,7 +59,7 @@ jobs:
       - name: Compare with stock firmware
         run: |
           python tools/compare_firmware.py "$STOCK_BIN" out/full_flash_0x0.bin -o out/comparison.md
-          cat out/comparison.md >> "$GITHUB_STEP_SUMMARY"
+          cat out/comparison.md | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
