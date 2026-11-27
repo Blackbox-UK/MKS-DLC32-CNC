@@ -43,12 +43,17 @@ jobs:
       - name: Make full flash image
         run: |
           B=firmware-src/Firmware/.pio/build/$PIO_ENV
-          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          FW=~/.platformio/packages/framework-arduinoespressif32
+          BOOT_APP0=$(find $FW -name boot_app0.bin | head -1)
+          # Arduino-ESP32 1.0.x ships a prebuilt bootloader instead of building one.
+          BOOTLOADER="$B/bootloader.bin"
+          [ -f "$BOOTLOADER" ] || BOOTLOADER=$(find $FW -name bootloader_dout_80m.bin | head -1)
+          echo "Bootloader: $BOOTLOADER"
           mkdir -p out
           cp "$B/firmware.bin" out/app.bin
           esptool --chip esp32 merge-bin -o out/full_flash_0x0.bin \
             --flash-mode keep --flash-size 4MB --pad-to-size 4MB \
-            0x1000 "$B/bootloader.bin" 0x8000 "$B/partitions.bin" \
+            0x1000 "$BOOTLOADER" 0x8000 "$B/partitions.bin" \
             0xe000 "$BOOT_APP0" 0x10000 "$B/firmware.bin"
 
       - name: Compare with stock firmware
