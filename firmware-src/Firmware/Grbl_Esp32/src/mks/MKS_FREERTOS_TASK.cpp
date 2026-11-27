@@ -95,6 +95,11 @@ static void mks_page_data_updata(void) {
     }
     else if(mks_ui_page.mks_ui_page == MKS_UI_Pring) { // 雕刻界面更新数据
 
+        // Live X/Y/Z readout: every 40*5 = 200 ms
+        if ((count_updata % 40) == 0 && SD_ready_next == false) {
+            mks_print_pos_updata();
+        }
+
         if((count_updata == 200) || (count_updata > 200) ) { // 200*5=1000ms = 1s
 
             if(SD_ready_next == false) {

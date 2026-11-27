@@ -14,13 +14,19 @@ on:
   workflow_dispatch:
 
 env:
-  PIO_ENV: mks_dlc32_v2_1
   # Firmware currently on the 3018's DLC32 V2.2 board (TS24 screen, CNC mode).
   STOCK_BIN: MKS-DLC32-main/firmware/TS24/CNC/Normal/Board_V2.0/V2.1.0_H24_20220511_01_N_CNC.bin
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # mks_dlc32_v2_1_ts24 is the build for the 3018 (TS24 screen).
+        env: [mks_dlc32_v2_1_ts24, mks_dlc32_v2_1]
+    env:
+      PIO_ENV: ${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,6 +65,7 @@ jobs:
       - name: Compare with stock firmware
         run: |
           python tools/compare_firmware.py "$STOCK_BIN" out/full_flash_0x0.bin -o out/comparison.md
+          echo "## Build: $PIO_ENV" >> "$GITHUB_STEP_SUMMARY"
           cat out/comparison.md | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4

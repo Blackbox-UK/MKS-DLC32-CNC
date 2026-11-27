@@ -13,6 +13,27 @@ static lv_color_t       bmp_public_buf[LV_BUF_SIZE];
 void my_disp_flush(lv_disp_drv_t * disp, const lv_area_t * area, lv_color_t * color_p);
 bool my_indev_touch(struct _lv_indev_drv_t * indev_drv, lv_indev_data_t * data);
 
+#if defined(MKS_TS24)
+/*
+ * TS24 support (2.4" 320x240 panel).
+ *
+ * The UI is laid out for the 480x320 TS35. Rather than re-laying out every
+ * page, LVGL keeps drawing a 480x320 virtual screen and each flushed area is
+ * scaled down to the panel: 3 virtual columns -> 2 panel columns and 4 virtual
+ * rows -> 3 panel rows, with area averaging so text stays smooth. The rounder
+ * keeps every area aligned to those 3x4 blocks. Touch is scaled back up.
+ */
+#define TS24_W        320
+#define TS24_H        240
+#define TS24_BLK_X    3
+#define TS24_BLK_Y    4
+
+static void ts24_rounder(lv_disp_drv_t * disp_drv, lv_area_t * area);
+
+// Output of one flush: at most LV_BUF_SIZE virtual pixels, scaled by 2/3 * 3/4.
+static uint16_t ts24_out_buf[LV_BUF_SIZE / 2 + TS24_W];
+#endif
+
 // 1ms
 void mks_lvgl_init(void) {
     
@@ -32,6 +53,9 @@ void mks_lvgl_init(void) {
     disp_drv.hor_res = LV_HOR_RES_MAX;
     disp_drv.ver_res = LV_VER_RES_MAX;
     disp_drv.flush_cb = my_disp_flush;
+#if defined(MKS_TS24)
+    disp_drv.rounder_cb = ts24_rounder;
+#endif
     disp_drv.buffer = &disp_buf;
     lv_disp_drv_register(&disp_drv);
 
@@ -42,6 +66,63 @@ void mks_lvgl_init(void) {
     lv_indev_drv_register(&indev_drv);
 }
 
+#if defined(MKS_TS24)
+static void ts24_rounder(lv_disp_drv_t * disp_drv, lv_area_t * area) {
+    area->x1 = (area->x1 / TS24_BLK_X) * TS24_BLK_X;
+    area->x2 = ((area->x2 / TS24_BLK_X) + 1) * TS24_BLK_X - 1;
+    area->y1 = (area->y1 / TS24_BLK_Y) * TS24_BLK_Y;
+    area->y2 = ((area->y2 / TS24_BLK_Y) + 1) * TS24_BLK_Y - 1;
+}
+
+// Per-axis weights for area averaging (each row sums to the block size).
+static const uint8_t ts24_wx[2][3] = { { 2, 1, 0 }, { 0, 1, 2 } };          // 3 -> 2, sum 3
+static const uint8_t ts24_wy[3][4] = { { 3, 1, 0, 0 }, { 0, 2, 2, 0 }, { 0, 0, 1, 3 } };  // 4 -> 3, sum 4
+
+void my_disp_flush(lv_disp_drv_t * disp, const lv_area_t * area, lv_color_t * color_p) {
+    // The rounder guarantees block-aligned areas inside the 480x320 virtual screen.
+    uint32_t vw = (area->x2 - area->x1 + 1);
+    uint32_t vh = (area->y2 - area->y1 + 1);
+    uint32_t bx = vw / TS24_BLK_X;
+    uint32_t by = vh / TS24_BLK_Y;
+    uint32_t ow = bx * 2;
+    uint32_t oh = by * 3;
+    uint16_t* out = ts24_out_buf;
+
+    for (uint32_t j = 0; j < by; j++) {
+        for (uint8_t oy = 0; oy < 3; oy++) {
+            for (uint32_t i = 0; i < bx; i++) {
+                for (uint8_t ox = 0; ox < 2; ox++) {
+                    uint32_t r = 0, g = 0, b = 0;
+                    for (uint8_t dy = 0; dy < TS24_BLK_Y; dy++) {
+                        uint8_t wy = ts24_wy[oy][dy];
+                        if (wy == 0) continue;
+                        const lv_color_t* row = color_p + (j * TS24_BLK_Y + dy) * vw + i * TS24_BLK_X;
+                        for (uint8_t dx = 0; dx < TS24_BLK_X; dx++) {
+                            uint8_t w = wy * ts24_wx[ox][dx];
+                            if (w == 0) continue;
+                            r += row[dx].ch.red * w;
+                            g += row[dx].ch.green * w;
+                            b += row[dx].ch.blue * w;
+                        }
+                    }
+                    // Weights sum to 3 * 4 = 12.
+                    lv_color_t c;
+                    c.ch.red   = (r + 6) / 12;
+                    c.ch.green = (g + 6) / 12;
+                    c.ch.blue  = (b + 6) / 12;
+                    *out++ = c.full;
+                }
+            }
+        }
+    }
+
+    tft.startWrite();
+    tft.setAddrWindow(area->x1 / TS24_BLK_X * 2, area->y1 / TS24_BLK_Y * 3, ow, oh);
+    tft.pushColors(ts24_out_buf, ow * oh, true);
+    tft.endWrite();
+    lv_disp_flush_ready(disp);
+}
+#else
 void my_disp_flush(lv_disp_drv_t * disp, const lv_area_t * area, lv_color_t * color_p) {
 
     uint32_t w = (area->x2 - area->x1 + 1);
@@ -60,6 +141,7 @@ void my_disp_flush(lv_disp_drv_t * disp, const lv_area_t * area, lv_color_t * co
     tft.endWrite();
     lv_disp_flush_ready(disp);
 }
+#endif
 
 bool my_indev_touch(struct _lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
@@ -68,12 +150,21 @@ bool my_indev_touch(struct _lv_indev_drv_t * indev_drv, lv_indev_data_t * data) 
     static uint16_t last_y = 0;
     boolean touched = tft.getTouch(&touchY, &touchX);
 
+#if defined(MKS_TS24)
+    // Same orientation handling as the stock TS24 firmware, then scale the
+    // 320x240 panel coordinates up to the 480x320 virtual screen.
+    if(touchX > TS24_W) touchX = TS24_W;
+    if(touchY > TS24_H) touchY = TS24_H;
+    touchX = (uint32_t)(TS24_W - touchX) * TS24_BLK_X / 2;
+    touchY = (uint32_t)(TS24_H - touchY) * TS24_BLK_Y / 3;
+#else
     if(touchX > 480) {
         touchX = 480;
     }
 
     touchX = 480 - touchX;
     touchY = 320 - touchY;
+#endif
     
     if( touched != false ) {
         last_x = touchX;

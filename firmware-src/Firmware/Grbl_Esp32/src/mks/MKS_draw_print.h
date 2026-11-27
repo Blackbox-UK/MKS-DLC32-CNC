@@ -113,6 +113,7 @@ typedef struct {
     lv_style_t print_bar_indic_style;
     lv_style_t print_file_name_style;
     lv_style_t print_sp_style;
+    lv_style_t print_pos_style;             // live X/Y/Z readout
 
     /* Label*/
     lv_obj_t* print_Label_power;
@@ -149,9 +150,9 @@ extern MKS_PRINT_PAGE_t print_src;
 
 typedef struct {
 
-    char print_xpos_str[10];
-    char print_ypos_str[10];
-    char print_zpos_str[10];
+    char print_xpos_str[16];
+    char print_ypos_str[16];
+    char print_zpos_str[16];
     char print_pwr_str[10];
     char print_speed_str[10];
     char print_rapid_str[10];
@@ -201,6 +202,7 @@ void mks_draw_operation(void);
 void mks_print_pwr_set(void);
 void mks_print_speed_set(void);
 void mks_print_data_updata(void);
+void mks_print_pos_updata(void);
 void print_send(void);
 
 uint8_t get_print_speed(void);

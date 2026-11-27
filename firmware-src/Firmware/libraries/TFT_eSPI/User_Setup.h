@@ -50,7 +50,13 @@
 //#define ST7789_2_DRIVER    // Minimal configuration option, define additional parameters below for this display
 //#define R61581_DRIVER
 //#define RM68140_DRIVER
+#if defined(MKS_TS24)
+// MKS TS24: 2.4" 240x320 ST7789 panel, blue/red order as in the stock TS24 firmware
+#define ST7789_DRIVER
+#define TFT_RGB_ORDER TFT_BGR
+#else
 #define ST7796_DRIVER
+#endif
 //#define SSD1351_DRIVER
 //#define SSD1963_480_DRIVER
 //#define SSD1963_800_DRIVER
@@ -75,7 +81,11 @@
 // #define M5STACK
 
 // For ST7789, ST7735, ILI9163 and GC9A01 ONLY, define the pixel width and height in portrait orientation
+#if defined(MKS_TS24)
+#define TFT_WIDTH  240   // TS24 ST7789 is 240x320 in portrait
+#else
 #define TFT_WIDTH  480
+#endif
 // #define TFT_WIDTH  128
 // #define TFT_WIDTH  240 // ST7789 240 x 240 and 240 x 320
 #define TFT_HEIGHT 320

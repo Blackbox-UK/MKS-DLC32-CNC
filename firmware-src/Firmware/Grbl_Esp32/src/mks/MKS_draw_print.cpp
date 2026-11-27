@@ -153,6 +153,18 @@ void mks_draw_print(void) {
 
     print_src.print_bar_print_percen = label_for_btn_name(print_src.print_bar_print, print_src.print_bar_print_percen, 190, 0, "0%");
 
+    /* Live work-position readout, between the progress bar and the F/S/R overrides */
+    lv_style_copy(&print_src.print_pos_style, &lv_style_plain_color);
+    print_src.print_pos_style.text.font = &lv_font_roboto_28;
+    print_src.print_pos_style.text.color = LV_COLOR_WHITE;
+    print_src.print_Label_x_pos = label_for_text(mks_global.mks_src, print_src.print_Label_x_pos, NULL, 12, 112, LV_ALIGN_IN_TOP_LEFT, "X:0.00");
+    print_src.print_Label_y_pos = label_for_text(mks_global.mks_src, print_src.print_Label_y_pos, NULL, 168, 112, LV_ALIGN_IN_TOP_LEFT, "Y:0.00");
+    print_src.print_Label_z_pos = label_for_text(mks_global.mks_src, print_src.print_Label_z_pos, NULL, 324, 112, LV_ALIGN_IN_TOP_LEFT, "Z:0.00");
+    lv_label_set_style(print_src.print_Label_x_pos, LV_LABEL_STYLE_MAIN, &print_src.print_pos_style);
+    lv_label_set_style(print_src.print_Label_y_pos, LV_LABEL_STYLE_MAIN, &print_src.print_pos_style);
+    lv_label_set_style(print_src.print_Label_z_pos, LV_LABEL_STYLE_MAIN, &print_src.print_pos_style);
+    mks_print_pos_updata();
+
     mks_ui_page.mks_ui_page = MKS_UI_Pring;  //进入雕刻界面
 	mks_ui_page.wait_count = DEFAULT_UI_COUNT;
 }
@@ -1046,6 +1058,26 @@ void mks_print_data_updata(void) {
     }
 }
 
+/* Refresh the live X/Y/Z readout with the work position (what the G-code is
+ * using), in inches when $13=1. Called every 200 ms while a job runs. */
+void mks_print_pos_updata(void) {
+    if (print_src.print_Label_x_pos == NULL) return;
+
+    float* pos = system_get_mpos();  // static buffer, safe to modify
+    mpos_to_wpos(pos);
+    float scale = report_inches->get() ? 1.0f / MM_PER_INCH : 1.0f;
+    const char* fmt[3] = { "X:%.2f", "Y:%.2f", "Z:%.2f" };
+    if (scale != 1.0f) { fmt[0] = "X:%.3f"; fmt[1] = "Y:%.3f"; fmt[2] = "Z:%.3f"; }
+
+    snprintf(print_data_updata.print_xpos_str, sizeof(print_data_updata.print_xpos_str), fmt[0], pos[X_AXIS] * scale);
+    snprintf(print_data_updata.print_ypos_str, sizeof(print_data_updata.print_ypos_str), fmt[1], pos[Y_AXIS] * scale);
+    snprintf(print_data_updata.print_zpos_str, sizeof(print_data_updata.print_zpos_str), fmt[2], pos[Z_AXIS] * scale);
+
+    print_src.print_Label_x_pos = mks_lv_label_updata(print_src.print_Label_x_pos, print_data_updata.print_xpos_str);
+    print_src.print_Label_y_pos = mks_lv_label_updata(print_src.print_Label_y_pos, print_data_updata.print_ypos_str);
+    print_src.print_Label_z_pos = mks_lv_label_updata(print_src.print_Label_z_pos, print_data_updata.print_zpos_str);
+}
+
 uint8_t get_print_speed(void) {
     
     return sys_rt_f_override;
@@ -1058,6 +1090,9 @@ uint8_t get_print_power(void) {
 
 
 void mks_clear_print(void) {
+    print_src.print_Label_x_pos = NULL;  // labels are deleted with the screen
+    print_src.print_Label_y_pos = NULL;
+    print_src.print_Label_z_pos = NULL;
     lv_obj_clean(mks_global.mks_src);
 }
 
