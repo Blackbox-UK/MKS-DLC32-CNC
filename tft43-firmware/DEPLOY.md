@@ -129,6 +129,12 @@ To recalibrate at any time: hold a finger on the screen while the splash is show
 
 With **everything powered off**:
 
+**Do not use a ribbon cable from EXP1 to the TFT43's EXP1.** The TFT43's EXP1/EXP2 headers
+are for BTT's Marlin "12864 mode" (LCD and encoder signals), not serial, and this firmware
+does not use them. A straight ribbon would tie the DLC32's IO5/IO25/IO26/IO27/IO33 and
+beeper pins to unrelated TFT pins, and nothing would talk. Make up a 4-wire cable from
+DLC32 EXP1 to the TFT43's 5-pin **RS232** header instead, as below.
+
 DLC32 **EXP1** (2×5 header, where the TS24's EXP1 cable went), viewed with the standard
 EXP1 numbering (pin 1 = BEEPER):
 
