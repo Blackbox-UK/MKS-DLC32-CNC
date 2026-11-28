@@ -1,0 +1,75 @@
+name: Firmware build
+
+on:
+  push:
+    paths:
+      - "firmware-src/**"
+      - "tools/compare_firmware.py"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "firmware-src/**"
+      - "tools/compare_firmware.py"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+env:
+  # Firmware currently on the 3018's DLC32 V2.2 board (TS24 screen, CNC mode).
+  STOCK_BIN: MKS-DLC32-main/firmware/TS24/CNC/Normal/Board_V2.0/V2.1.0_H24_20220511_01_N_CNC.bin
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # mks_dlc32_v2_1_ts24 is the build for the 3018 (TS24 screen).
+        # mks_dlc32_v2_1_tft43 drives a BTT TFT43 (tft43-firmware) over serial instead of the TS24.
+        env: [mks_dlc32_v2_1_ts24, mks_dlc32_v2_1, mks_dlc32_v2_1_tft43]
+    env:
+      PIO_ENV: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware-src/Firmware/platformio.ini', 'firmware-src/Firmware/ini/*.ini') }}
+
+      - name: Install PlatformIO and esptool
+        run: pip install platformio esptool && pip install --pre "capstone>=6.0.0a1"
+
+      - name: Build
+        working-directory: firmware-src/Firmware
+        run: pio run -e "$PIO_ENV"
+
+      - name: Make full flash image
+        run: |
+          B=firmware-src/Firmware/.pio/build/$PIO_ENV
+          FW=~/.platformio/packages/framework-arduinoespressif32
+          BOOT_APP0=$(find $FW -name boot_app0.bin | head -1)
+          # Arduino-ESP32 1.0.x ships a prebuilt bootloader instead of building one.
+          BOOTLOADER="$B/bootloader.bin"
+          [ -f "$BOOTLOADER" ] || BOOTLOADER=$(find $FW -name bootloader_dout_80m.bin | head -1)
+          echo "Bootloader: $BOOTLOADER"
+          mkdir -p out
+          cp "$B/firmware.bin" out/app.bin
+          esptool --chip esp32 merge-bin -o out/full_flash_0x0.bin \
+            --flash-mode keep --flash-size 4MB --pad-to-size 4MB \
+            0x1000 "$BOOTLOADER" 0x8000 "$B/partitions.bin" \
+            0xe000 "$BOOT_APP0" 0x10000 "$B/firmware.bin"
+
+      - name: Compare with stock firmware
+        run: |
+          python tools/compare_firmware.py "$STOCK_BIN" out/full_flash_0x0.bin -o out/comparison.md
+          echo "## Build: $PIO_ENV" >> "$GITHUB_STEP_SUMMARY"
+          cat out/comparison.md | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.PIO_ENV }}-${{ github.sha }}
+          path: out/
