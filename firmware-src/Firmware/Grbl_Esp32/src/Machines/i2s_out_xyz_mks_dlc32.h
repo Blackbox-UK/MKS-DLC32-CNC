@@ -39,6 +39,15 @@
     #define BOARD_NAME              "Board:MKS DLC32 CNC V1.0"
 #endif
 
+#ifdef MKS_SERIAL_SCREEN
+// Serial touch screen instead of the TS24/TS35: the screen's LCD_CS / TOUCH_CS pins
+// on EXP1 become a UART. EXP1-7 = IO25 (DLC32 TX -> screen RX), EXP1-5 = IO26
+// (screen TX -> DLC32 RX), EXP1-10 = 5V, EXP1-9 = GND. 3.3 V logic.
+#define SCREEN_UART_TX              GPIO_NUM_25
+#define SCREEN_UART_RX              GPIO_NUM_26
+#define SCREEN_UART_BAUD            115200
+#endif
+
 #ifdef MKS_TS24
 #define FW_NAME                     "V2.1(8M.H24.20220421)"
 #else

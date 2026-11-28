@@ -70,6 +70,10 @@ static TaskHandle_t clientCheckTaskHandle = 0;
 
 WebUI::InputBuffer client_buffer[CLIENT_COUNT];  // create a buffer for each client
 
+#ifdef MKS_SERIAL_SCREEN
+Uart ScreenUart(2);  // serial touch screen, see SCREEN_UART_* in the machine file
+#endif
+
 // Returns the number of bytes available in a client buffer.
 uint8_t client_get_rx_buffer_available(uint8_t client) {
 #ifdef REVERT_TO_ARDUINO_SERIAL
@@ -114,6 +118,10 @@ void client_init() {
     client_reset_read_buffer(CLIENT_ALL);
     // Uart0.write("\r\n");  // create some white space after ESP32 boot info
     Uart0.write("\n");  // create some white space after ESP32 boot info
+#ifdef MKS_SERIAL_SCREEN
+    ScreenUart.setPins(SCREEN_UART_TX, SCREEN_UART_RX);
+    ScreenUart.begin(SCREEN_UART_BAUD, Uart::Data::Bits8, Uart::Stop::Bits1, Uart::Parity::None);
+#endif
 #endif
     clientCheckTaskHandle = 0;
     // create a task to check for incoming data
@@ -144,6 +152,12 @@ static uint8_t getClientChar(uint8_t* data) {
         *data = WebUI::inputBuffer.read();
         return CLIENT_INPUT;
     }
+#ifdef MKS_SERIAL_SCREEN
+    if (client_buffer[CLIENT_SCREEN].availableforwrite() && (res = ScreenUart.read()) != -1) {
+        *data = res;
+        return CLIENT_SCREEN;
+    }
+#endif
     //currently is wifi or BT but better to prepare both can be live
 #ifdef ENABLE_BLUETOOTH
     if (WebUI::SerialBT.hasClient()) {
@@ -369,6 +383,11 @@ void client_write(uint8_t client, const char* text) {
 #if defined(ENABLE_WIFI) && defined(ENABLE_TELNET)
     if (client == CLIENT_TELNET || client == CLIENT_ALL) {
         WebUI::telnet_server.write((const uint8_t*)text, strlen(text));
+    }
+#endif
+#ifdef MKS_SERIAL_SCREEN
+    if (client == CLIENT_SCREEN || client == CLIENT_ALL) {
+        ScreenUart.write(text);
     }
 #endif
     if (client == CLIENT_SERIAL || client == CLIENT_ALL || client == CLIENT_LCD) {

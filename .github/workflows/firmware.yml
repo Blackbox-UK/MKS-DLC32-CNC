@@ -24,7 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         # mks_dlc32_v2_1_ts24 is the build for the 3018 (TS24 screen).
-        env: [mks_dlc32_v2_1_ts24, mks_dlc32_v2_1]
+        # mks_dlc32_v2_1_tft43 drives a BTT TFT43 (tft43-firmware) over serial instead of the TS24.
+        env: [mks_dlc32_v2_1_ts24, mks_dlc32_v2_1, mks_dlc32_v2_1_tft43]
     env:
       PIO_ENV: ${{ matrix.env }}
     steps:

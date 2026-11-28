@@ -53,7 +53,12 @@ enum class Message : uint8_t {
 // #define CLIENT_SD  6
 
 #define CLIENT_ALL 0xFF
-#define CLIENT_COUNT 6  // total number of client types regardless if they are used
+#ifdef MKS_SERIAL_SCREEN
+#    define CLIENT_SCREEN 6  // serial touch screen (e.g. BTT TFT43) on the TS24 connector
+#    define CLIENT_COUNT 7   // total number of client types regardless if they are used
+#else
+#    define CLIENT_COUNT 6  // total number of client types regardless if they are used
+#endif
 // #define CLIENT_COUNT 5  // total number of client types regardless if they are used
 enum class MsgLevel : int8_t {  // Use $Message/Level
     None    = 0,

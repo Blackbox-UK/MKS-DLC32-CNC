@@ -120,9 +120,13 @@ void _mc_task_init(void) {
     mks_grbl_parg_init();
     ts35_beep_init();
     bsp_led_init();
+#ifndef MKS_SERIAL_SCREEN
     tft_TS35_init();
+#endif
     test_cfg_find_init();
-    disp_task_init();
+#ifndef MKS_SERIAL_SCREEN
+    disp_task_init();  // LVGL UI for the TS24/TS35; a serial screen runs its own UI
+#endif
 }
 
 

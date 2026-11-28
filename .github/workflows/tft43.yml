@@ -1,0 +1,37 @@
+name: TFT43 screen firmware
+
+on:
+  push:
+    paths:
+      - "tft43-firmware/**"
+      - ".github/workflows/tft43.yml"
+  pull_request:
+    paths:
+      - "tft43-firmware/**"
+      - ".github/workflows/tft43.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tft43-firmware
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Build firmware
+        run: make
+
+      - name: Run UI simulator checks and screenshots
+        run: pip install pillow && make sim
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tft43-firmware-${{ github.sha }}
+          path: |
+            tft43-firmware/build/*.bin
+            tft43-firmware/sim/out/*.png
