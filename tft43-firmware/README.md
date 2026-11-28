@@ -9,7 +9,7 @@ Screens (tabs along the bottom edge; the stock MKS TS24/TS35 menus plus two new 
 | Tab | What it does | Stock MKS menu |
 |---|---|---|
 | DRO | live X/Y/Z work position (large) and machine position, feed, spindle, coolant, pins; zero each axis; Unlock / Home when in alarm; during a job: file, progress, pause / resume, stop (asks first; feed hold, then reset once at rest), feed override | Ready, Carving |
-| Move | jog X/Y/Z in 0.1 / 1 / 10 / 50 mm steps at 300 / 1000 / 2500 mm/min, jog cancel, home, zero XY / Z, go to XY zero, probe Z (asks first) | Move |
+| Jog | jog X/Y/Z in 0.1 / 1 / 10 / 50 mm steps at 300 / 1000 / 2500 mm/min, jog cancel, home all axes (`$H`) or one axis (`$HX` / `$HY` / `$HZ`), zero XY / Z, go to XY zero, probe Z (asks first), unlock | Move |
 | Files | list the DLC32's SD card (`$SD/List`), run a file (asks first) | Carve / file |
 | Tool | spindle off / 25 / 50 / 75 / 100 % of `$30`, flood coolant on / off, spindle override | Power / Tool |
 | Code | G-code console: what was sent and received, the job's current line (needs the `mks_dlc32_v2_1_tft43` DLC32 build), on-screen keyboard to send any command | new |
