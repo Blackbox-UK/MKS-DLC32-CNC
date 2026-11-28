@@ -2,11 +2,32 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "hw.h"
 #include "uart.h"
 #include "grbl.h"
 
 grbl_t grbl;
+log_line_t grbl_log[LOG_LINES];
+int grbl_log_head;
+uint32_t grbl_log_seq;
+
+static void log_add(uint8_t kind, const char * text)
+{
+  log_line_t * l = &grbl_log[grbl_log_head];
+  l->kind = kind;
+  strncpy(l->text, text, LOG_LEN - 1);
+  l->text[LOG_LEN - 1] = 0;
+  grbl_log_head = (grbl_log_head + 1) % LOG_LINES;
+  grbl_log_seq++;
+}
+
+void grbl_log_clear(void)
+{
+  memset(grbl_log, 0, sizeof(grbl_log));
+  grbl_log_head = 0;
+  grbl_log_seq++;
+}
 
 #define POLL_MS        200   // status report rate while connected
 #define POLL_SLOW_MS   1000  // while disconnected
@@ -15,6 +36,7 @@ grbl_t grbl;
 #define QLEN 8
 #define QLINE 96
 
+static void log_add(uint8_t kind, const char * text);
 static char queue[QLEN][QLINE];
 static int qh, qt;
 static bool waiting_ok;
@@ -41,7 +63,13 @@ bool grbl_send(const char * line)
 
 bool grbl_idle_queue(void) { return qh == qt && !waiting_ok; }
 
-void grbl_realtime(uint8_t c) { uart_putc(c); }
+void grbl_realtime(uint8_t c)
+{
+  uart_putc(c);
+  const char * name = c == RT_HOLD ? "[feed hold]" : c == RT_RESUME ? "[resume]" : c == RT_RESET ? "[reset]"
+                    : c == RT_JOG_CANCEL ? "[jog cancel]" : NULL;
+  if (name) log_add(LOG_TX, name);
+}
 
 static void set_msg(const char * s, bool err)
 {
@@ -95,7 +123,7 @@ static void parse_status(char * s)
 {
   char * end = strchr(s, '>');
   if (end) *end = 0;
-  bool have_m = false, have_w = false, have_sd = false;
+  bool have_m = false, have_w = false, have_sd = false, have_a = false, have_ln = false;
   char * field = s + 1;
   bool first = true;
   while (field && *field) {
@@ -124,6 +152,19 @@ static void parse_status(char * s)
       grbl.ov_feed = (int)v[0]; grbl.ov_rapid = (int)v[1]; grbl.ov_spindle = (int)v[2];
     } else if (!strncmp(field, "Pn:", 3)) {
       strncpy(grbl.pins, field + 3, sizeof(grbl.pins) - 1);
+    } else if (!strncmp(field, "A:", 2)) {
+      const char * a = field + 2;
+      grbl.spindle_on = strchr(a, 'S') || strchr(a, 'C');
+      grbl.spindle_ccw = strchr(a, 'C') != NULL;
+      grbl.flood = strchr(a, 'F') != NULL;
+      grbl.mist = strchr(a, 'M') != NULL;
+      have_a = true;
+    } else if (!strncmp(field, "SDLn:", 5)) {
+      const char * p = field + 5;
+      grbl.sd_line = strtol(p, (char **)&p, 10);
+      if (*p == ':') p++;
+      strncpy(grbl.sd_line_text, p, sizeof(grbl.sd_line_text) - 1);
+      have_ln = true;
     } else if (!strncmp(field, "SD:", 3)) {
       const char * p = field + 3;
       grbl.sd_pct = parse_float(&p);
@@ -139,6 +180,8 @@ static void parse_status(char * s)
     if (have_m) grbl.wpos[i] = grbl.mpos[i] - grbl.wco[i];
     else if (have_w) grbl.mpos[i] = grbl.wpos[i] + grbl.wco[i];
   }
+  if (!have_a) grbl.spindle_on = grbl.spindle_ccw = grbl.flood = grbl.mist = false;
+  if (!have_ln) { grbl.sd_line = 0; grbl.sd_line_text[0] = 0; }
   grbl.sd_running = have_sd;
   if (!have_sd) grbl.sd_pct = 0;
 }
@@ -176,9 +219,22 @@ void grbl_handle_line(char * s)
 
   if (s[0] == '<') {
     parse_status(s);
-  } else if (!strcmp(s, "ok")) {
+    return;
+  }
+  if (!strcmp(s, "ok")) {
     reply_done();
-  } else if (!strncmp(s, "error:", 6)) {
+    return;
+  }
+  bool is_err = !strncmp(s, "error", 5) || !strncmp(s, "ALARM:", 6);
+  log_add(is_err ? LOG_ERR : LOG_RX, s);
+
+  if (!strncmp(s, "$30=", 4)) {
+    grbl.spindle_max = (float)atof(s + 4);
+  } else if (isdigit((unsigned char)s[0]) && strchr(s, '.') && strlen(s) < sizeof(grbl.ip) &&
+             strspn(s, "0123456789.") == strlen(s)) {
+    strcpy(grbl.ip, s);  // reply to [ESP111]
+  } else if (!strncmp(s, "error", 5)) {
+    // "error:N" (Grbl) or "error N" (Grbl_Esp32 busy reply)
     int code = atoi(s + 6);
     char m[64];
     snprintf(m, sizeof(m), "Error %d: %s", code, grbl_error_text(code));
@@ -241,6 +297,7 @@ void grbl_poll(void)
     if (!strncmp(queue[qt], "$SD/List", 8)) { grbl.file_count = 0; grbl.files_loading = true; }
     uart_puts(queue[qt]);
     uart_puts("\n");
+    log_add(LOG_TX, queue[qt]);
     qt = (qt + 1) % QLEN;
     waiting_ok = true;
     sent_at = now;

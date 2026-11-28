@@ -69,12 +69,15 @@ static void shot(const char * dir, const char * name)
   sim_save_ppm(p);
 }
 
+#define NAV(i) tap((i) * 80 + 40, 250)
+#define TOPY 34
+
 int main(int argc, char ** argv)
 {
   const char * out = argc > 1 ? argv[1] : ".";
   ui_init();
   run(100);
-  shot(out, "0-no-link");
+  shot(out, "00-no-link");
 
   sim_rx("\r\nGrbl 1.3a ['$' for help]\r\n");
   status("<Idle|MPos:12.500,-3.250,-1.000|FS:0,0|WCO:2.500,-3.250,-6.000>");
@@ -83,59 +86,94 @@ int main(int argc, char ** argv)
   expect(grbl.wpos[0] > 9.99f && grbl.wpos[0] < 10.01f, "WPos X = MPos - WCO = 10.000");
   expect(grbl.wpos[2] > 4.99f && grbl.wpos[2] < 5.01f, "WPos Z = 5.000");
   run(500);
-  shot(out, "1-main-idle");
+  shot(out, "01-dro-idle");
 
-  // zero X (button at 396,42)
   sim_txn = 0;
-  tap(430, 60);
+  tap(436, TOPY + 20);  // X zero
   expect_sent("G10 L20 P0 X0\n");
   ack();
 
-  // jog screen, step 10 mm, X+
-  tap(50, 248);  // Jog
-  tap(330 + 2 * 37 + 10, 130);  // step 10
+  // Move
+  NAV(1);
+  tap(276 + 2 * 50 + 20, 110);  // step 10
   sim_txn = 0;
-  tap(6 + 2 * 76 + 30, 40 + 62 + 30);  // X+
+  tap(6 + 2 * 64 + 30, TOPY + 64 + 30);  // X+
   expect_sent("$J=G91 G21 X10.000 F1000\n");
   ack();
   status("<Jog|MPos:20.000,-3.250,-1.000|FS:1000,0>");
-  shot(out, "2-jog");
+  shot(out, "02-move");
   status("<Idle|MPos:22.500,-3.250,-1.000|FS:0,0>");
-  tap(50, 248);  // Back
-
-  // files
   sim_txn = 0;
-  tap(4 + 3 * 96 + 40, 248);  // Files
+  tap(426 + 25, 178 + 22);  // Probe -> confirm
+  shot(out, "03-confirm-probe");
+  tap(310, 188);  // OK
+  expect_sent("G38.2 G91 Z-50 F80\n");
+  ack(); ack(); ack(); ack();
+
+  // Tool
+  sim_txn = 0;
+  NAV(3);
+  expect_sent("$$\n");
+  sim_rx("$30=12000\r\n$31=0\r\nok\r\n");
+  run(50);
+  expect(grbl.spindle_max > 11999, "$30 read as spindle max");
+  sim_txn = 0;
+  tap(106 + 92 + 40, TOPY + 52);  // 50%
+  expect_sent("M3 S6000\n");
+  ack();
+  status("<Idle|MPos:22.500,-3.250,-1.000|FS:0,6000|A:SF>");
+  expect(grbl.spindle_on && grbl.flood, "A:SF parsed as spindle on + flood");
+  run(100);
+  shot(out, "04-tool");
+  sim_txn = 0;
+  tap(14 + 42, TOPY + 30 + 22);  // Off
+  expect_sent("M5\n");
+  ack();
+  status("<Idle|MPos:22.500,-3.250,-1.000|FS:0,0>");
+
+  // Files
+  sim_txn = 0;
+  NAV(2);
   run(50);
   expect_sent("$SD/List\n");
   sim_rx("[FILE:/sign-face.nc|SIZE:183422]\r\n[FILE:/pcb-isolation-top.gcode|SIZE:2411093]\r\n"
          "[FILE:/test-square.nc|SIZE:812]\r\n[FILE:/logo_engrave_v2.nc|SIZE:95111]\r\nok\r\n");
   run(100);
   expect(grbl.file_count == 4, "4 files listed");
-  tap(100, 38 + 36 + 10);  // second row
-  shot(out, "3-files");
-  tap(400, 248);  // Run
-  shot(out, "4-confirm");
+  tap(100, TOPY + 38 + 15);  // second row
+  shot(out, "05-files");
+  tap(436, TOPY + 144 + 20);  // Run
+  shot(out, "06-confirm-run");
   sim_txn = 0;
-  tap(300, 190);  // confirm Run
+  tap(310, 188);  // OK
   expect_sent("$SD/Run=/pcb-isolation-top.gcode\n");
   ack();
 
-  // running job
-  status("<Run|MPos:42.120,17.880,-1.500|FS:600,12000|WCO:2.500,-3.250,-6.000|Ov:110,100,100|SD:37.45,/pcb-isolation-top.gcode>");
+  // running job (DRO shows job controls)
+  status("<Run|MPos:42.120,17.880,-1.500|FS:600,12000|WCO:2.500,-3.250,-6.000|Ov:110,100,100|A:S"
+         "|SD:37.45,/pcb-isolation-top.gcode|SDLn:1532:G1 X40.12 Y21.13 F600>");
   run(300);
   expect(grbl.sd_running && grbl.sd_pct > 37.4f, "SD progress parsed");
-  shot(out, "5-job-running");
-  tap(50, 248);  // Pause
+  expect(grbl.sd_line == 1532 && !strcmp(grbl.sd_line_text, "G1 X40.12 Y21.13 F600"), "current SD line parsed");
+  shot(out, "07-dro-job");
+  sim_txn = 0; sim_tx[0] = 0;
+  tap(436, TOPY + 20);  // Pause
   expect(strchr(sim_tx, '!') != NULL, "Pause sends feed hold");
-  status("<Hold:0|MPos:42.120,17.880,-1.500|FS:0,12000|Ov:110,100,100|SD:37.50,/pcb-isolation-top.gcode>");
+  status("<Hold:0|MPos:42.120,17.880,-1.500|FS:0,12000|Ov:110,100,100|SD:37.50,/pcb-isolation-top.gcode|SDLn:1533:G1 X42.4>");
   run(300);
-  shot(out, "6-job-hold");
+  shot(out, "08-dro-hold");
 
-  // stop: feed hold first, controller reset once motion has stopped
+  // console
+  NAV(4);
+  run(100);
+  shot(out, "09-code");
+
+  // stop: confirm, feed hold, reset once at rest
+  NAV(0);
   status("<Run|MPos:42.120,17.880,-1.500|FS:600,12000|SD:38.00,/pcb-isolation-top.gcode>");
   sim_txn = 0; sim_tx[0] = 0;
-  tap(4 + 96 + 40, 248);  // Stop
+  tap(436, TOPY + 50 + 20);  // Stop
+  tap(310, 188);             // OK
   expect(strchr(sim_tx, '!') != NULL && strchr(sim_tx, 0x18) == NULL, "Stop sends feed hold, not reset yet");
   status("<Hold:1|MPos:42.300,17.880,-1.500|FS:200,12000|SD:38.00,/pcb-isolation-top.gcode>");
   expect(strchr(sim_tx, 0x18) == NULL, "no reset while still decelerating (Hold:1)");
@@ -146,15 +184,36 @@ int main(int argc, char ** argv)
   sim_rx("ALARM:1\r\n");
   status("<Alarm|MPos:0.000,0.000,0.000|FS:0,0|Pn:X>");
   run(200);
-  shot(out, "7-alarm");
+  shot(out, "10-dro-alarm");
   sim_txn = 0;
-  tap(4 + 2 * 96 + 40, 248);  // Unlock
+  tap(312, 205);  // Unlock
   expect_sent("$X\n");
   ack();
-
   status("<Idle|MPos:0.000,0.000,0.000|FS:0,0>");
-  tap(4 + 4 * 96 + 40, 248);  // More
-  shot(out, "8-more");
+
+  // console keyboard: type G0X5 and send
+  NAV(4);
+  tap(395 + 19, 186 + 19);  // keyboard
+  tap(4 + 4 * 47 + 20, 46 + 2 * 44 + 20);  // G
+  tap(4 + 9 * 47 + 20, 46 + 20);           // 0
+  tap(4 + 1 * 47 + 20, 46 + 3 * 44 + 20);  // X
+  tap(4 + 4 * 47 + 20, 46 + 20);           // 5
+  shot(out, "11-keyboard");
+  sim_txn = 0;
+  tap(408 + 34, 226 + 21);  // Send
+  expect_sent("G0X5\n");
+  ack();
+
+  // setup + wifi
+  NAV(5);
+  shot(out, "12-setup");
+  sim_txn = 0;
+  tap(244 + 116, TOPY + 22);  // WiFi
+  expect_sent("[ESP111]\n");
+  sim_rx("192.168.1.57\r\nok\r\n");
+  run(100);
+  expect(!strcmp(grbl.ip, "192.168.1.57"), "IP from [ESP111]");
+  shot(out, "13-wifi");
 
   // link loss
   run(3000);

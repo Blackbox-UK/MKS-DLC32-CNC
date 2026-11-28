@@ -105,3 +105,146 @@ void gfx_text_box(const font_t * f, int x, int y, int w, int h, int align, const
   buf[n] = 0;
   gfx_text(f, tx, ty, buf, fg, bg);
 }
+
+// ---------------------------------------------------------------- shading
+#include "icons.h"
+
+uint16_t gfx_mix(uint16_t a, uint16_t b, int t)
+{
+  int ar = a >> 11, ag = (a >> 5) & 63, ab = a & 31;
+  int br = b >> 11, bg = (b >> 5) & 63, bb = b & 31;
+  int r = ar + ((br - ar) * t + 127) / 255;
+  int g = ag + ((bg - ag) * t + 127) / 255;
+  int bl = ab + ((bb - ab) * t + 127) / 255;
+  return (uint16_t)((r << 11) | (g << 5) | bl);
+}
+
+uint16_t gfx_lighten(uint16_t c, int amount) { return gfx_mix(c, 0xFFFF, amount); }
+uint16_t gfx_darken(uint16_t c, int amount) { return gfx_mix(c, 0x0000, amount); }
+
+static uint16_t grad_at(uint16_t top, uint16_t bottom, int y, int y0, int h)
+{
+  if (h <= 1) return top;
+  int t = (y - y0) * 255 / (h - 1);
+  if (t < 0) t = 0;
+  if (t > 255) t = 255;
+  return gfx_mix(top, bottom, t);
+}
+
+void gfx_vgradient(int x, int y, int w, int h, uint16_t top, uint16_t bottom)
+{
+  for (int i = 0; i < h; i++) gfx_fill(x, y + i, w, 1, grad_at(top, bottom, y + i, y, h));
+}
+
+// corner inset for row i of a radius-r rounded rectangle
+static int corner_inset(int r, int i)
+{
+  if (i >= r) return 0;
+  int dy = r - i;
+  int inset = 0;
+  while ((r - inset) * (r - inset) + dy * dy > r * r + r) inset++;
+  return inset;
+}
+
+static void round_rows(int x, int y, int w, int h, int r, uint16_t top, uint16_t bottom, uint16_t bg,
+                       uint16_t rim_top, uint16_t rim_bottom, bool rim)
+{
+  for (int i = 0; i < h; i++) {
+    int in = corner_inset(r, i);
+    int in2 = corner_inset(r, h - 1 - i);
+    if (in2 > in) in = in2;
+    uint16_t c = grad_at(top, bottom, y + i, y, h);
+    gfx_fill(x, y + i, in, 1, bg);
+    gfx_fill(x + w - in, y + i, in, 1, bg);
+    if (rim && (i == 0 || i == h - 1)) {
+      gfx_fill(x + in, y + i, w - 2 * in, 1, i == 0 ? rim_top : rim_bottom);
+    } else if (rim) {
+      uint16_t rc = grad_at(rim_top, rim_bottom, y + i, y, h);
+      gfx_fill(x + in, y + i, 1, 1, rc);
+      gfx_fill(x + in + 1, y + i, w - 2 * in - 2, 1, c);
+      gfx_fill(x + w - in - 1, y + i, 1, 1, rc);
+    } else {
+      gfx_fill(x + in, y + i, w - 2 * in, 1, c);
+    }
+  }
+}
+
+void gfx_bevel_face(uint16_t base, bool pressed, uint16_t * top, uint16_t * bottom)
+{
+  *top = pressed ? gfx_darken(base, 60) : gfx_lighten(base, 70);
+  *bottom = pressed ? gfx_lighten(base, 20) : gfx_darken(base, 55);
+}
+
+void gfx_bevel(int x, int y, int w, int h, int r, uint16_t base, uint16_t bg, bool pressed)
+{
+  // drop shadow: 2 px below, softened
+  gfx_fill(x + 2, y + h, w - 2, 1, gfx_darken(bg, 110));
+  gfx_fill(x + 3, y + h + 1, w - 4, 1, gfx_darken(bg, 50));
+  uint16_t top, bottom;
+  gfx_bevel_face(base, pressed, &top, &bottom);
+  uint16_t rim_top = pressed ? gfx_darken(base, 120) : gfx_lighten(base, 140);
+  uint16_t rim_bottom = gfx_darken(base, 130);
+  round_rows(x, y, w, h, r, top, bottom, bg, rim_top, rim_bottom, true);
+}
+
+void gfx_inset_face(uint16_t base, uint16_t * top, uint16_t * bottom)
+{
+  *top = gfx_darken(base, 40);
+  *bottom = gfx_lighten(base, 12);
+}
+
+void gfx_inset(int x, int y, int w, int h, int r, uint16_t base, uint16_t bg)
+{
+  uint16_t t, b;
+  gfx_inset_face(base, &t, &b);
+  round_rows(x, y, w, h, r, t, b, bg, gfx_darken(base, 140),
+             gfx_lighten(base, 60), true);
+}
+
+void gfx_icon(int icon, int x, int y, uint16_t fg, uint16_t bg_top, uint16_t bg_bottom, int face_y, int face_h)
+{
+  if (icon < 0 || icon >= ICON_COUNT) return;
+  const uint8_t * d = icon_data[icon];
+  lcd_window(x, y, x + ICON_SIZE - 1, y + ICON_SIZE - 1);
+  for (int row = 0; row < ICON_SIZE; row++) {
+    uint16_t bg = grad_at(bg_top, bg_bottom, y + row, face_y, face_h);
+    for (int col = 0; col < ICON_SIZE; col += 2) {
+      uint8_t b = *d++;
+      lcd_pixel(blend(fg, bg, b >> 4));
+      lcd_pixel(blend(fg, bg, b & 15));
+    }
+  }
+}
+
+void gfx_text_on(const font_t * f, int x, int y, const char * s, uint16_t fg, uint16_t top, uint16_t bottom, int face_y, int face_h)
+{
+  for (; *s; s++, x += f->w) {
+    if (x < 0 || y < 0 || x + f->w > LCD_WIDTH || y + f->h > LCD_HEIGHT) continue;
+    const uint8_t * g = glyph(f, *s);
+    lcd_window(x, y, x + f->w - 1, y + f->h - 1);
+    for (int row = 0; row < f->h; row++) {
+      uint16_t bg = grad_at(top, bottom, y + row, face_y, face_h);
+      for (int col = 0; col < f->w; col++) {
+        int i = row * f->w + col;
+        uint8_t a = g ? ((i & 1) ? (g[i >> 1] & 15) : (g[i >> 1] >> 4)) : 0;
+        lcd_pixel(a ? blend(fg, bg, a) : bg);
+      }
+    }
+  }
+}
+
+void gfx_text_box_g(const font_t * f, int x, int y, int w, int h, int align, const char * s, uint16_t fg,
+                    uint16_t top, uint16_t bottom, int face_y, int face_h)
+{
+  for (int i = 0; i < h; i++) gfx_fill(x, y + i, w, 1, grad_at(top, bottom, y + i, face_y, face_h));
+  char buf[64];
+  int maxc = w / f->w;
+  int n = (int)strlen(s);
+  if (n > maxc) n = maxc;
+  if (n > (int)sizeof(buf) - 1) n = sizeof(buf) - 1;
+  memcpy(buf, s, n);
+  buf[n] = 0;
+  int tw = n * f->w;
+  int tx = (align == ALIGN_LEFT) ? x : (align == ALIGN_RIGHT) ? x + w - tw : x + (w - tw) / 2;
+  gfx_text_on(f, tx, y + (h - f->h) / 2, buf, fg, top, bottom, face_y, face_h);
+}

@@ -1,7 +1,7 @@
 # PC simulator for the TFT43 Grbl UI: make && ./sim out/
 CC ?= gcc
 OUT ?= out
-SRC = sim_main.c sim_hw.c ../src/ui.c ../src/grbl.c ../src/gfx.c ../src/fonts.c
+SRC = sim_main.c sim_hw.c ../src/ui.c ../src/grbl.c ../src/gfx.c ../src/fonts.c ../src/icons.c
 
 all: sim
 	mkdir -p $(OUT)

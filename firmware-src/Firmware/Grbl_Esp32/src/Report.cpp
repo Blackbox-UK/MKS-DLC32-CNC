@@ -774,6 +774,14 @@ void report_realtime_status(uint8_t client) {
         strcat(status, temp);
         sd_get_current_filename(temp);
         strcat(status, temp);
+#    ifdef MKS_SERIAL_SCREEN
+        // current line for the serial screen's console: |SDLn:<number>:<text>
+        char ln[64];
+        snprintf(ln, sizeof(ln), "|SDLn:%u:%s", (unsigned)sd_get_current_line_number(), sd_current_line_text);
+        if (strlen(status) + strlen(ln) < sizeof(status) - 8) {
+            strcat(status, ln);
+        }
+#    endif
     }
 #endif
 #ifdef REPORT_HEAP

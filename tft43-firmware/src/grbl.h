@@ -21,6 +21,11 @@ typedef struct {
   float sd_pct;
   char sd_file[NAME_LEN];
   char pins[12];
+  bool spindle_on, spindle_ccw, flood, mist;  // from the A: field
+  long sd_line;            // current SD line number (DLC32 serial-screen build), 0 = unknown
+  char sd_line_text[40];
+  float spindle_max;       // $30, 0 until read
+  char ip[20];             // from [ESP111]
   char version[32];
 
   // last message for the UI, seq changes on every new one
@@ -59,6 +64,16 @@ bool grbl_idle_queue(void);        // nothing waiting for "ok"
 
 const char * grbl_alarm_text(int code);
 const char * grbl_error_text(int code);
+
+// Console log of lines sent and received (status reports and "ok" left out)
+#define LOG_LINES 40
+#define LOG_LEN   56
+enum { LOG_TX, LOG_RX, LOG_ERR };
+typedef struct { uint8_t kind; char text[LOG_LEN]; } log_line_t;
+extern log_line_t grbl_log[LOG_LINES];
+extern int grbl_log_head;      // next slot to write
+extern uint32_t grbl_log_seq;  // changes on every new line
+void grbl_log_clear(void);
 
 // for the PC simulator and tests: feed one received line
 void grbl_handle_line(char * line);

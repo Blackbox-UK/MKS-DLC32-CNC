@@ -51,7 +51,7 @@ int main(void)
     if (ui_request_calibration) {
       ui_request_calibration = false;
       touch_calibrate();
-      ui_show(SCR_MAIN);
+      ui_show(SCR_DRO);
     }
   }
 }

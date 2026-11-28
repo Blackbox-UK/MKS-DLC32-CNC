@@ -29,6 +29,9 @@ uint8_t                    SD_client     = CLIENT_SERIAL;
 // uint8_t                    SD_client     = CLIENT_SD;
 WebUI::AuthenticationLevel SD_auth_level = WebUI::AuthenticationLevel::LEVEL_GUEST;
 uint32_t                   sd_current_line_number;     // stores the most recent line number read from the SD
+#ifdef MKS_SERIAL_SCREEN
+char sd_current_line_text[40];  // most recent line read from the SD, trimmed
+#endif
 static char                comment[LINE_BUFFER_SIZE];  // Line to be executed. Zero-terminated.
 
 #define USE_HSPI_FOR_SD 1
@@ -213,6 +216,16 @@ boolean readFileLine(char* line, int maxlen) {
         line[len++] = c;
     }
     line[len] = '\0';
+#ifdef MKS_SERIAL_SCREEN
+    // keep a short copy for the serial screen's G-code console (status "|SDLn:")
+    int n = 0;
+    for (int i = 0; i < len && n < (int)sizeof(sd_current_line_text) - 1; i++) {
+        char c = line[i];
+        if (c == '\r' || c == '|' || c == '>' || c == '<') continue;
+        sd_current_line_text[n++] = c;
+    }
+    sd_current_line_text[n] = '\0';
+#endif
     return len || myFile.available();
 }
 

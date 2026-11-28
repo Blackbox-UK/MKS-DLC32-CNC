@@ -50,6 +50,9 @@ boolean  readFileLine(char* line, int len);
 void     readFile(fs::FS& fs, const char* path);
 float    sd_report_perc_complete();
 uint32_t sd_get_current_line_number();
+#ifdef MKS_SERIAL_SCREEN
+extern char sd_current_line_text[40];
+#endif
 void     sd_get_current_filename(char* name);
 
 
