@@ -101,10 +101,14 @@ int main(int argc, char ** argv)
   expect_sent("$J=G91 G21 X10.000 F1000\n");
   ack();
   status("<Jog|MPos:20.000,-3.250,-1.000|FS:1000,0>");
-  shot(out, "02-move");
+  shot(out, "02-jog");
   status("<Idle|MPos:22.500,-3.250,-1.000|FS:0,0>");
   sim_txn = 0;
-  tap(426 + 25, 178 + 22);  // Probe -> confirm
+  tap(276 + 2 * 51 + 23, 178 + 23);  // Home Y
+  expect_sent("$HY\n");
+  ack();
+  sim_txn = 0;
+  tap(6 + 30, TOPY + 128 + 30);  // Probe (bottom-left corner of the pad) -> confirm
   shot(out, "03-confirm-probe");
   tap(310, 188);  // OK
   expect_sent("G38.2 G91 Z-50 F80\n");

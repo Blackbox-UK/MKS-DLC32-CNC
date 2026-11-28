@@ -1,7 +1,7 @@
 # TFT43 Grbl firmware for the BigTreeTech TFT43 V3.0 (STM32F207VCT6)
 # Needs arm-none-eabi-gcc (Ubuntu: apt install gcc-arm-none-eabi libnewlib-arm-none-eabi)
 
-FW_VERSION ?= 0.2.0
+FW_VERSION ?= 0.2.1
 # The BTT bootloader flashes any file named BIGTREE_TFT43_V3.0*.bin from the SD card root
 BIN_NAME   = BIGTREE_TFT43_V3.0.grbl-$(FW_VERSION)
 BUILD      = build

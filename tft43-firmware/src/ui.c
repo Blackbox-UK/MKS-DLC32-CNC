@@ -2,7 +2,7 @@
 //
 // Screen map (the stock MKS TS24/TS35 menus plus a readout and a G-code console):
 //   DRO     live X/Y/Z, zero buttons, alarm help, job progress and job controls
-//   Move    jog X/Y/Z, step and speed, home, zero, go to zero, probe Z   (MKS "Move")
+//   Jog     jog X/Y/Z, step and speed, home all or one axis, zero, go to zero, probe Z (MKS "Move")
 //   Files   SD card list on the DLC32, run with confirmation            (MKS "Carve"/"inFile")
 //   Tool    spindle on/off and speed, coolant, spindle override          (MKS "Power"/"Tool")
 //   Code    G-code console: log, current job line, keyboard to send      (new)
@@ -49,7 +49,7 @@ enum {
   B_ZERO_X, B_ZERO_Y, B_ZERO_Z, B_UNLOCK, B_HOME, B_PAUSE, B_RESUME, B_STOP, B_FEED_MINUS, B_FEED_PLUS,
   // Move
   B_XM, B_XP, B_YM, B_YP, B_ZM, B_ZP, B_JOG_STOP, B_STEP0, B_STEP1, B_STEP2, B_STEP3, B_FEED0, B_FEED1,
-  B_FEED2, B_ZERO_XY, B_GOTO_ZERO, B_PROBE,
+  B_FEED2, B_ZERO_XY, B_GOTO_ZERO, B_PROBE, B_HOME_X, B_HOME_Y, B_HOME_Z,
   // Files
   B_UP, B_DOWN, B_REFRESH, B_RUN, B_ROW0, B_ROW1, B_ROW2, B_ROW3, B_ROW4,
   // Tool
@@ -107,11 +107,24 @@ static void draw_button(const button_t * b, bool down)
   int iw = b->icon >= 0 ? ICON_SIZE : 0;
   int gap = (iw && tw) ? 6 : 0;
   if (iw + gap + tw > b->w - 8) { f = &font_small; tw = gfx_text_width(f, b->label); }
-  if (iw + gap + tw > b->w - 4 && iw) { tw = 0; gap = 0; }  // too narrow: icon only
-  int x = b->x + (b->w - iw - gap - tw) / 2 + (down ? 1 : 0);
-  int ytxt = b->y + (b->h - f->h) / 2 + (down ? 1 : 0);
   uint16_t icol = (b->style == ST_TAB_ACTIVE) ? C_ACCENT : fg;
-  if (iw) gfx_icon(b->icon, x, b->y + (b->h - ICON_SIZE) / 2 + (down ? 1 : 0), icol, top, bottom, face_y, face_h);
+  int d = down ? 1 : 0;
+  if (iw && tw && (iw + gap + tw > b->w - 4 || (b->w < 56 && b->h >= 40))) {
+    // too narrow for icon + label side by side: stack them if tall enough, else icon only
+    if (b->h >= 40 && gfx_text_width(&font_small, b->label) <= b->w - 4) {
+      f = &font_small;
+      tw = gfx_text_width(f, b->label);
+      int top_y = b->y + (b->h - ICON_SIZE - f->h) / 2 + d;
+      gfx_icon(b->icon, b->x + (b->w - ICON_SIZE) / 2 + d, top_y, icol, top, bottom, face_y, face_h);
+      gfx_text_on(f, b->x + (b->w - tw) / 2 + d, top_y + ICON_SIZE, b->label, fg, top, bottom, face_y, face_h);
+      return;
+    }
+    tw = 0;
+    gap = 0;
+  }
+  int x = b->x + (b->w - iw - gap - tw) / 2 + d;
+  int ytxt = b->y + (b->h - f->h) / 2 + d;
+  if (iw) gfx_icon(b->icon, x, b->y + (b->h - ICON_SIZE) / 2 + d, icol, top, bottom, face_y, face_h);
   if (tw) {
     char buf[24];
     int n = (b->w - 4 - iw - gap) / f->w;
@@ -278,7 +291,7 @@ static void draw_bar(void)
 
 // ---------------------------------------------------------------- navigation
 static const struct { int icon; const char * label; } tabs[6] = {
-  {ICON_DRO, "DRO"}, {ICON_MOVE, "Move"}, {ICON_FILES, "Files"},
+  {ICON_DRO, "DRO"}, {ICON_MOVE, "Jog"}, {ICON_FILES, "Files"},
   {ICON_SPINDLE, "Tool"}, {ICON_CONSOLE, "Code"}, {ICON_SETTINGS, "Setup"},
 };
 
@@ -390,8 +403,8 @@ static void dro_dynamic(void)
   }
 }
 
-// ---------------------------------------------------------------- Move
-static void move_layout(void)
+// ---------------------------------------------------------------- Jog
+static void jog_layout(void)
 {
   bool mv = can_move();
   const int s = 60, g = 4, x0 = 6, y0 = TOP;
@@ -400,33 +413,40 @@ static void move_layout(void)
   add(x0 + s + g, y0 + s + g, s, s, B_JOG_STOP, ICON_STOP, "", C_RED, grbl.state == ST_JOG);
   add(x0 + 2 * (s + g), y0 + s + g, s, s, B_XP, ICON_RIGHT, "", C_BUTTON, mv);
   add(x0 + s + g, y0 + 2 * (s + g), s, s, B_YM, ICON_DOWN, "", C_BUTTON, mv);
+  // free corners of the XY pad
+  add(x0, y0, s, s, B_ZERO_XY, ICON_ZERO, "XY", C_BUTTON, mv);
+  add(x0 + 2 * (s + g), y0, s, s, B_GOTO_ZERO, ICON_DRO, "Go 0", C_BUTTON, mv);
+  add(x0, y0 + 2 * (s + g), s, s, B_PROBE, ICON_PROBE, "Probe", C_BUTTON, mv);
+  add(x0 + 2 * (s + g), y0 + 2 * (s + g), s, s, B_UNLOCK, ICON_UNLOCK, "Unlock", grbl.state == ST_ALARM ? C_ORANGE : C_BUTTON,
+      grbl.connected && grbl.state == ST_ALARM);
   int zx = x0 + 3 * (s + g) + 6;
   add(zx, y0, s, s, B_ZP, ICON_UP, "", C_BUTTON, mv);
-  add(zx, y0 + s + g, s, s, B_HOME, ICON_HOME, "", C_BUTTON, mv || grbl.state == ST_ALARM);
+  add(zx, y0 + s + g, s, s, B_ZERO_Z, ICON_ZERO, "Z", C_BUTTON, mv);
   add(zx, y0 + 2 * (s + g), s, s, B_ZM, ICON_DOWN, "", C_BUTTON, mv);
 
   static const char * sl[4] = {"0.1", "1", "10", "50"};
   for (int i = 0; i < 4; i++) {
-    add(276 + i * 50, 96, 46, 34, B_STEP0 + i, -1, sl[i], C_BUTTON, true);
+    add(276 + i * 51, 96, 47, 34, B_STEP0 + i, -1, sl[i], C_BUTTON, true);
     if (i == step_sel) last()->style = ST_SELECTED;
   }
   static const char * fl[3] = {"300", "1000", "2500"};
   for (int i = 0; i < 3; i++) {
-    add(276 + i * 67, 136, 63, 34, B_FEED0 + i, -1, fl[i], C_BUTTON, true);
+    add(276 + i * 68, 136, 64, 34, B_FEED0 + i, -1, fl[i], C_BUTTON, true);
     if (i == feed_sel) last()->style = ST_SELECTED;
   }
-  add(276, 178, 46, 44, B_ZERO_XY, -1, "XY0", C_BUTTON, mv);
-  add(326, 178, 46, 44, B_ZERO_Z, -1, "Z0", C_BUTTON, mv);
-  add(376, 178, 46, 44, B_GOTO_ZERO, ICON_HOME, "", C_BUTTON, mv);
-  add(426, 178, 50, 44, B_PROBE, ICON_PROBE, "", C_BUTTON, mv);
+  // homing: all axes, or one axis ($HX / $HY / $HZ)
+  bool hm = mv || (grbl.connected && grbl.state == ST_ALARM);
+  static const char * hl[4] = {"All", "X", "Y", "Z"};
+  static const uint8_t hid[4] = {B_HOME, B_HOME_X, B_HOME_Y, B_HOME_Z};
+  for (int i = 0; i < 4; i++) add(276 + i * 51, 178, 47, 46, hid[i], ICON_HOME, hl[i], C_BUTTON, hm);
 }
 
-static void move_static(void)
+static void jog_static(void)
 {
   gfx_inset(276, TOP, 200, 58, 7, C_PANEL, C_BG);
 }
 
-static void move_dynamic(void)
+static void jog_dynamic(void)
 {
   char s[24], v[16];
   for (int a = 0; a < 3; a++) {
@@ -801,6 +821,9 @@ static void on_button(uint8_t id)
     case B_ZERO_XY: zero_axes("X0 Y0"); break;
     case B_UNLOCK: grbl_send("$X"); break;
     case B_HOME: grbl_send("$H"); break;
+    case B_HOME_X: grbl_send("$HX"); break;
+    case B_HOME_Y: grbl_send("$HY"); break;
+    case B_HOME_Z: grbl_send("$HZ"); break;
     case B_PAUSE: grbl_realtime(RT_HOLD); break;
     case B_RESUME: grbl_realtime(RT_RESUME); break;
     case B_STOP: ask("Stop the job?", "The spindle stops and the job ends", B_STOP, C_RED); break;
@@ -873,7 +896,7 @@ static void build_layout(void)
   if (overlay == OV_CONFIRM) { confirm_layout(); return; }
   switch (screen) {
     case SCR_DRO: dro_layout(); break;
-    case SCR_MOVE: move_layout(); break;
+    case SCR_JOG: jog_layout(); break;
     case SCR_FILES: files_layout(); break;
     case SCR_TOOL: tool_layout(); break;
     case SCR_CONSOLE: code_layout(); break;
@@ -889,7 +912,7 @@ static void draw_static(void)
   if (overlay == OV_CONFIRM) { confirm_static(); return; }
   switch (screen) {
     case SCR_DRO: dro_static(); break;
-    case SCR_MOVE: move_static(); break;
+    case SCR_JOG: jog_static(); break;
     case SCR_FILES: files_static(); break;
     case SCR_TOOL: tool_static(); break;
     case SCR_CONSOLE: code_static(); break;
@@ -996,7 +1019,7 @@ void ui_step(bool down, int x, int y)
   draw_bar();
   switch (screen) {
     case SCR_DRO: dro_dynamic(); break;
-    case SCR_MOVE: move_dynamic(); break;
+    case SCR_JOG: jog_dynamic(); break;
     case SCR_FILES: files_dynamic(); break;
     case SCR_TOOL: tool_dynamic(); break;
     case SCR_CONSOLE: code_dynamic(); break;
