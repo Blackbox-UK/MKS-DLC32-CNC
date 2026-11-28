@@ -46,14 +46,15 @@ port and switches the TS24 screen code off.
 
 | DLC32 EXP1 | Signal | TFT43 "RS232" header (RST, TX2, RX2, −, + left to right) |
 |---|---|---|
-| pin 10 | 5V | + |
-| pin 9 | GND | − |
-| pin 7 (IO25) | DLC32 TX | RX2 |
-| pin 5 (IO26) | DLC32 RX | TX2 |
+| 5V | 5V | + |
+| GND | GND | − |
+| IO25 | DLC32 TX | RX2 |
+| IO26 | DLC32 RX | TX2 |
 
-Both sides are 3.3 V logic, so no level shifter. EXP1 pin map (V2.1_003): odd row 1 BEEPER,
-3 IO5, 5 IO26, 7 IO25, 9 GND; even row 2 NC, 4 IO27, 6 NC, 8 IO33, 10 5V. Check pins 9 and 10
-with a multimeter before connecting.
+Both sides are 3.3 V logic, so no level shifter. EXP1 is the upper 2×5 header (nearer the
+ESP32; EXP2 is by the RESET button). Per MKS's V2.1_003 pin drawing, GND and 5V are the pair
+at the end towards the board centre, then IO25, then IO26; BEEPER is at the board-edge end.
+Find 5V and GND with a multimeter before connecting the screen.
 
 **Full step-by-step deploy guide (both firmwares, wiring, backup, rollback): [DEPLOY.md](DEPLOY.md).**
 

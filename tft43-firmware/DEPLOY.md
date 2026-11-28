@@ -135,20 +135,39 @@ does not use them. A straight ribbon would tie the DLC32's IO5/IO25/IO26/IO27/IO
 beeper pins to unrelated TFT pins, and nothing would talk. Make up a 4-wire cable from
 DLC32 EXP1 to the TFT43's 5-pin **RS232** header instead, as below.
 
-DLC32 **EXP1** (2×5 header, where the TS24's EXP1 cable went), viewed with the standard
-EXP1 numbering (pin 1 = BEEPER):
+DLC32 **EXP1** is the upper of the two 2×5 headers at the board's edge, nearer the ESP32
+module (where the TS24's EXP1 cable went). The lower one, next to the RESET button, is EXP2.
+MKS's pin drawing (`MKS-DLC32-main/hardware/MKS DLC32 V2.1_003/... PIN.pdf`) shows EXP1 like
+this, viewed from above with the board's edge on the right and EXP2 below:
 
 ```
- odd row :  1 BEEPER   3 IO5    5 IO26   7 IO25   9 GND
- even row:  2 NC       4 IO27   6 NC     8 IO33  10 5V
+                 board centre  <-------------------------->  board edge
+ ESP32 side row:    GND     IO25    IO26    IO5     BEEPER
+ EXP2 side row :    5V      IO33    NC      IO27    NC
 ```
+
+So **GND and 5V are the pair at the end towards the board centre**, IO25 sits next to GND,
+and IO26 next to IO25. (In standard EXP1 numbering those are pins 9, 10, 7 and 5; MKS doesn't
+print numbers on the board, so go by position and the meter, not the numbers.)
 
 | DLC32 EXP1 | Signal | → | TFT43 "RS232" header |
 |---|---|---|---|
-| pin 10 | 5V | → | 5V (+5V) |
-| pin 9 | GND | → | GND |
-| pin 7 (IO25) | DLC32 TX | → | **RX** |
-| pin 5 (IO26) | DLC32 RX | → | **TX** |
+| 5V (centre end, EXP2-side row) | 5V | → | + |
+| GND (centre end, ESP32-side row) | GND | → | − |
+| IO25 (next to GND) | DLC32 TX | → | **RX2** |
+| IO26 (next to IO25) | DLC32 RX | → | **TX2** |
+
+**Using a 10-wire IDC ribbon on the EXP1 end:** the colours only tell you the wire order,
+not which pin each wire lands on. That depends on which way round the plug sits. Pick the
+two wires at the board-centre end of the plug (in a rainbow ribbon plugged with brown at that
+end, brown and red). One is GND, the other 5V: measure to find which. Then:
+
+| Wire on GND is... | IO25 (DLC32 TX) is | IO26 (DLC32 RX) is |
+|---|---|---|
+| the outermost wire (e.g. brown) | the 3rd wire (orange) | the 5th wire (green) |
+| the 2nd wire (e.g. red) | the 4th wire (yellow) | the 6th wire (blue) |
+
+The other six wires stay unconnected and should be insulated.
 
 The TFT43 V3.0's **RS232** header is the 5-pin white connector at the top right, next to
 EXP1. Its silkscreen reads, left to right with the header at the top: **RST, TX2, RX2, −
@@ -158,10 +177,10 @@ or TX4/RX4 connectors on the right-hand edge.
 | TFT43 RS232 pin (left to right) | Connect to |
 |---|---|
 | RST | nothing |
-| TX2 | DLC32 EXP1 pin 5 (IO26, DLC32 RX) |
-| RX2 | DLC32 EXP1 pin 7 (IO25, DLC32 TX) |
-| − (GND) | DLC32 EXP1 pin 9 (GND) |
-| + (5V) | DLC32 EXP1 pin 10 (5V) |
+| TX2 | DLC32 EXP1 IO26 (DLC32 RX) |
+| RX2 | DLC32 EXP1 IO25 (DLC32 TX) |
+| − (GND) | DLC32 EXP1 GND |
+| + (5V) | DLC32 EXP1 5V |
 
 The RS232 header is a 2.5 mm JST-XH socket. The 5-pin XH lead that came with the TFT43 fits
 it; cut or re-pin the other end with female Dupont crimps for the DLC32's EXP1 pins. Single
@@ -170,10 +189,13 @@ Dupont jumpers also push onto the XH pins if you have no lead.
 Leave the TFT43's RST pin unconnected. Both sides use 3.3 V logic, so no level shifter is
 needed.
 
-**Check before connecting:** with the DLC32 powered and nothing plugged into EXP1, measure
-with the multimeter: pin 9 to the board's GND terminal = 0 Ω (continuity), pin 10 to GND =
-about 5 V. If pin 10 reads 0 V and pin 9 reads 5 V, you are looking at the header the other
-way round; use the measured pins, not the drawing.
+**Check before connecting the screen:** power the DLC32 (TS24 unplugged), with your cable
+plugged into EXP1 and the screen end loose. Put the meter's black probe on a known GND (for
+example the − of the 12/24 V input) and touch the red probe to each of the two board-centre
+wires: the one reading about 5 V is 5V, the one reading 0 V is GND. Power off and confirm the
+GND wire beeps to GND on continuity. Only then fit them into + and − of the TFT43's RS232
+plug. Getting 5V and GND wrong is the one mistake here that can damage a board; swapping
+TX and RX cannot.
 
 ## 8. Verify it works
 
@@ -202,7 +224,7 @@ LaserGRBL / UGS over USB keep working at the same time, and so does the DLC32 we
 |---|---|
 | File on the card still ends in `.bin`, old firmware starts | Card not FAT32, file not in the root, or name changed. Reformat, copy again, keep the exact name. |
 | White or blank TFT43 after flashing | GD32 chip, or a damaged file. Put the stock BTT firmware on the card and power on (section 10). |
-| "No link" on the TFT43 | TX/RX swapped (swap pins 5 and 7), the DLC32 is still on the stock or `ts24` firmware, or GND not connected. On USB, `?` must answer for the screen to work too. |
+| "No link" on the TFT43 | TX/RX swapped (swap the IO25 and IO26 wires), the DLC32 is still on the stock or `ts24` firmware, or GND not connected. On USB, `?` must answer for the screen to work too. |
 | Touch is offset | Hold the screen during the splash and recalibrate. |
 | Files list empty | No SD card in the DLC32, or it has no files in the root; tap Refresh. |
 | Code tab never shows "Ln ..." during a job | The DLC32 is not running the `mks_dlc32_v2_1_tft43` build. |
