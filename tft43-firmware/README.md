@@ -44,12 +44,12 @@ The TFT43 replaces the TS24 and uses the DLC32's **EXP1** connector. The DLC32 n
 `mks_dlc32_v2_1_tft43` firmware build, which turns two of the TS24's pins into a serial
 port and switches the TS24 screen code off.
 
-| DLC32 EXP1 | Signal | TFT43 serial header |
+| DLC32 EXP1 | Signal | TFT43 "RS232" header (RST, TX2, RX2, −, + left to right) |
 |---|---|---|
-| pin 10 | 5V | 5V |
-| pin 9 | GND | GND |
-| pin 7 (IO25) | DLC32 TX | RX |
-| pin 5 (IO26) | DLC32 RX | TX |
+| pin 10 | 5V | + |
+| pin 9 | GND | − |
+| pin 7 (IO25) | DLC32 TX | RX2 |
+| pin 5 (IO26) | DLC32 RX | TX2 |
 
 Both sides are 3.3 V logic, so no level shifter. EXP1 pin map (V2.1_003): odd row 1 BEEPER,
 3 IO5, 5 IO26, 7 IO25, 9 GND; even row 2 NC, 4 IO27, 6 NC, 8 IO33, 10 5V. Check pins 9 and 10

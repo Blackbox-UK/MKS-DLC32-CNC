@@ -40,7 +40,7 @@ can be undone (see [Rolling back](#10-rolling-back)).
 
 Turn the TFT43 over and read the large square chip.
 
-- **STM32F207VCT6** (or similar "STM32F207"): carry on. This is what the firmware is built for.
+- **STM32F207VCT6** (or similar "STM32F207"): carry on. (Paul's TFT43 is confirmed STM32F207VCT6, from photos 2026-11-28.) This is what the firmware is built for.
 - **GD32F205VCT6**: **stop here.** The GD version uses a different bootloader layout and
   needs its own build. Our file would not start on it (it would sit on a blank or white
   screen; putting the stock BTT GD firmware back on the card recovers it). Ask for a GD build.
@@ -149,6 +149,23 @@ EXP1 numbering (pin 1 = BEEPER):
 | pin 9 | GND | → | GND |
 | pin 7 (IO25) | DLC32 TX | → | **RX** |
 | pin 5 (IO26) | DLC32 RX | → | **TX** |
+
+The TFT43 V3.0's **RS232** header is the 5-pin white connector at the top right, next to
+EXP1. Its silkscreen reads, left to right with the header at the top: **RST, TX2, RX2, −
+(GND), +** (5V). TX2/RX2 is the USART2 this firmware uses. Do not use the separate TX3/RX3
+or TX4/RX4 connectors on the right-hand edge.
+
+| TFT43 RS232 pin (left to right) | Connect to |
+|---|---|
+| RST | nothing |
+| TX2 | DLC32 EXP1 pin 5 (IO26, DLC32 RX) |
+| RX2 | DLC32 EXP1 pin 7 (IO25, DLC32 TX) |
+| − (GND) | DLC32 EXP1 pin 9 (GND) |
+| + (5V) | DLC32 EXP1 pin 10 (5V) |
+
+The RS232 header is a 2.5 mm JST-XH socket. The 5-pin XH lead that came with the TFT43 fits
+it; cut or re-pin the other end with female Dupont crimps for the DLC32's EXP1 pins. Single
+Dupont jumpers also push onto the XH pins if you have no lead.
 
 Leave the TFT43's RST pin unconnected. Both sides use 3.3 V logic, so no level shifter is
 needed.
