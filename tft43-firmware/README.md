@@ -51,9 +51,11 @@ port and switches the TS24 screen code off.
 | pin 7 (IO25) | DLC32 TX | RX |
 | pin 5 (IO26) | DLC32 RX | TX |
 
-Both sides are 3.3 V logic, so no level shifter. Check pin 1 on the EXP1 header (the
-DLC32 V2.1 pin map labels EXP1 as GND, IO25, IO26, IO5, BEEPER on one row and 5V, IO33,
-NC, IO27, NC on the other) before powering up.
+Both sides are 3.3 V logic, so no level shifter. EXP1 pin map (V2.1_003): odd row 1 BEEPER,
+3 IO5, 5 IO26, 7 IO25, 9 GND; even row 2 NC, 4 IO27, 6 NC, 8 IO33, 10 5V. Check pins 9 and 10
+with a multimeter before connecting.
+
+**Full step-by-step deploy guide (both firmwares, wiring, backup, rollback): [DEPLOY.md](DEPLOY.md).**
 
 ## Flashing
 
